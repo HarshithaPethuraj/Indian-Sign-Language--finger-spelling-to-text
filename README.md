@@ -98,3 +98,151 @@ and adds genuine NLP value at the stage where it belongs.
 ---
 
 ## Architecture
+
+User fingerspells a word
+        |
+        v
+[Stage 1 - Vision]
+MobileNetV2 classifies each
+static ISL hand sign -> letter
+        |
+        v
+Noisy letter stream
+(e.g. HELLO -> HLLLO)
+        |
+        v
+[Stage 2 - Language]
+Transformer encoder-decoder
+trained on CNN real confusion
+distribution -> corrected word
+        |
+        v
+Beam search + dictionary prior
+-> final word output
+
+---
+
+## Dataset
+
+- Source: DataMites Indian Sign Language fingerspelling (PRAICP-1000)
+- Size: 4,972 images across 24 static ISL letters (A-Y)
+- Balance: min 116 images (G) to max 259 images (B)
+- Excluded: J and Z (require motion, cannot be captured in still images)
+- Note: Dataset is proprietary and not included in this repository
+
+---
+
+## Tech Stack
+
+Python - PyTorch - torchvision - OpenCV - scikit-learn - NumPy - pandas -
+Matplotlib - Seaborn - Streamlit - Hugging Face Spaces
+
+---
+
+## Project Structure
+
+PRAICP-1000-Indian-Sign-Language/
+├── PRAICP-1000-Indian-Sign-Language.ipynb  # full analysis notebook
+├── app.py                                  # Streamlit deployment app
+├── requirements.txt                        # HF Spaces dependencies
+├── README.md                               # this file
+├── stage1_champion.pt                      # MobileNetV2 weights (state_dict)
+├── stage2_transformer.pt                   # Transformer corrector weights
+└── deploy_config.json                      # class order, vocab, word list, config
+
+---
+
+## Deployment
+
+### Hugging Face Spaces (Streamlit)
+
+The app rebuilds both architectures in app.py and loads PyTorch state_dict
+weights - immune to version-metadata drift across environments (the PyTorch
+equivalent of the weights-only pattern used across this portfolio).
+
+Three tabs:
+- Stage 1: upload a hand-sign image, get the predicted letter with top-5
+  confidence scores
+- Stage 2: type a noisy spelling, get it corrected via beam search with a
+  dictionary prior
+- About: pipeline explanation and scope
+
+### Run Locally
+
+```bash
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+Place stage1_champion.pt, stage2_transformer.pt, and deploy_config.json
+in the same directory as app.py before running.
+
+---
+
+## Key Results
+
+- MobileNetV2 achieved 99.9% validation accuracy on 24-class ISL hand-sign
+  recognition, with even the weakest letters scoring above F1 0.989 (R: 0.989,
+  X: 0.990).
+- The Transformer corrector outperformed the LSTM on both parameter count
+  (171K vs 204K) and final training loss (1.271 vs 2.025).
+- Beam search with a dictionary prior recovers real words under heavy corruption
+  where greedy decoding fails entirely.
+- Confusion-aware Stage 2 training couples the vision and language stages through
+  the CNN's empirical error distribution rather than a uniform noise assumption.
+
+---
+
+## Challenges Faced
+
+- RAM crash from collecting raw pixels into a Python list - fixed by resizing
+  to 64x64 before collection and accumulating into NumPy uint8 arrays (1 byte
+  per pixel vs 28 bytes per Python int).
+- Kernel restart after crash wiped all variables - always run all cells from
+  the top after a Colab kernel restart.
+- Greedy decoding failed on all 6 qualitative demo words - directly motivated
+  beam search (Section 8) and confusion-aware retraining (Section 8.5).
+- HF Spaces Streamlit version mismatch - use_container_width unavailable on
+  the installed version; fixed by switching to use_column_width.
+- No real noisy-to-clean training pairs exist - the entire Stage 2 corpus was
+  synthetically engineered by programmatically corrupting clean words to mimic
+  Stage-1 recognition errors.
+
+---
+
+## Limitations
+
+- Static fingerspelling only (24 letters, no J/Z); dynamic whole-word gestures
+  require video.
+- Stage 2 corpus covers common English words; rare or technical words may not
+  reconstruct correctly.
+- Stages are trained separately; a jointly trained pipeline could propagate
+  uncertainty from vision into the language model.
+- Dataset collected under controlled plain backgrounds - real-world webcam
+  performance may be lower due to clutter, variable lighting, and skin-tone
+  diversity gaps.
+
+---
+
+## Future Work
+
+- Train Stage 2 on a large English dictionary (tens of thousands of words) for
+  true generalisation beyond a fixed vocabulary.
+- Feed CNN per-letter softmax probabilities into Stage 2 as uncertainty weights,
+  not just the argmax letter prediction.
+- Extend to dynamic signs with a video model (CNN+LSTM or video Transformer)
+  to cover J, Z, and whole-word ISL gestures.
+- Joint end-to-end training of both stages so vision uncertainty propagates
+  directly into the language correction.
+
+---
+
+## About
+
+Built as part of the DataMites AI Engineer certification (PTID-AIE-MAY-26-11194),
+Project Code PRAICP-1000.
+
+**Harshitha Pethuraj**
+- GitHub: https://github.com/HarshithaPethuraj
+- LinkedIn: https://www.linkedin.com/in/harshitha-pethuraj-13738129b/
+- HF Spaces: https://huggingface.co/spaces/harshithapethuraj
